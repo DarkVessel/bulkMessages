@@ -1,0 +1,28 @@
+{
+  "name": "bulkmessages",
+  "version": "1.0.0",
+  "description": "Код для отправки нескольких сообщений вебхуками в определенный канал.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DarkVessel/bulkMessages.git"
+  },
+  "keywords": [
+    "Discord_Webhook",
+    "Messages"
+  ],
+  "author": "DarkVessel",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/DarkVessel/bulkMessages/issues"
+  },
+  "homepage": "https://github.com/DarkVessel/bulkMessages#readme",
+  "dependencies": {
+    "discord.js": "^12.5.1",
+    "dotenv": "^8.2.0",
+    "strftime": "^0.10.0"
+  }
+}
