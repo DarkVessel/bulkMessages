@@ -23,6 +23,7 @@
   "dependencies": {
     "discord.js": "^12.5.1",
     "dotenv": "^8.2.0",
+    "progress": "^2.0.3",
     "strftime": "^0.10.0"
   }
 }

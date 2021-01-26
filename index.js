@@ -12,6 +12,7 @@ if (!fs.existsSync(".env")) { // Если отсутствует файл .env
 };
 require("dotenv").config();
 const startPing = Date.now();
+const ProgressBar = require('progress');
 const config = require("./config.json");
 const Discord = require("discord.js");
 const strftime = require("strftime");
@@ -58,83 +59,85 @@ function addMsg({ author, embeds, content, attachments, createdAt }) {
 const hook = new Discord.WebhookClient(process.env.WEBHOOK_ID, process.env.WEBHOOK_TOKEN);
 const client = new Discord.Client();
 
-client.on("ready", () => {
+client.on("ready", async () => {
     console.log(`Клиент запущен! || Ping: ${Date.now() - startPing} ms.`);
     console.log(`Текущий канал: ${!config.channel ? "Не настроен." : config.channel}`);
     console.log("Напишите .start для старта отправки сообщений.");
     console.log("Напишите .channel для изменения канала.");
     console.log("Напишите .exit для выхода.");
     console.log("Просмотреть и отредактировать сообщения можно в файле cache.json.")
+    const deletedCache = await input("Удалить прошлый список сообщений? [ Y/n ]: ");
+    if (["y", "yes", "да"].some(t => deletedCache.toLowerCase().includes(t))) {
+        msg = [];
+        writeFile("./cache.json", "[]");
+    };
+    let channel = client.channels.cache.get(config.channel);
     new Promise(async resolve => {
-        const deletedCache = await input("Удалить прошлый список сообщений? [ Y/n ]: ");
-        if (["y", "yes", "да"].some(t => deletedCache.toLowerCase().includes(t))) {
-            msg = [];
-            writeFile("./cache.json", "[]");
-        };
-        let channel = client.channels.cache.get(config.channel);
-        new Promise(async resolve => {
-            async function saveChannel() {
-                if (channel) return resolve();
-                const channel_ID = await input("Укажите ID канала: ");
-                const channel2 = client.channels.cache.get(channel_ID);
-                if (!channel2) {
-                    console.log(">>> Канал не найден!!!");
-                    saveChannel();
-                } else {
-                    channel = channel2;
-                    console.log(`>>> Выбран канал #${channel2.name} ( ${channel2.id} )`);
-                    config.channel = channel2.id
-                    await writeFile("./config.json", JSON.stringify(config, null, 4));
-                    resolve()
-                }
-            };
-            saveChannel()
-        }).then(() => write())
-        async function write(id) {
-            if (!id) id = await input(`Укажите ID сообщения №${msg.length+1}: `);
-            if (id.toLowerCase() === ".start") {
-                if (msg.length === 0) {
-                    console.log(">>> А сообщений то нема!!!");
-                    write();
-                    return;
-                };
-                const bool = await input(`Будет отправлено ${msg.length} сообщений. Продолжить? [ Y/n ] `);
-                if (["y", "yes", "да"].some(t => bool.toLowerCase().includes(t))) {
-                    let i = 0;
-                    async function send() {
-                        if (msg.length === 0) {
-                            console.log(">>> Передача файлов завершена, всего хорошего.");
-                            process.exit();
-                        };
-                        i++
-                        console.log(`>>> Отправляю ${i} сообщение...`);
-                        console.log(msg[0]);
-                        await hook.send(msg[0]);
-                        msg.shift();
-                        send();
-                    }
-                    return send()
-                } else write()
-            } else if (id.toLowerCase() === ".channel") {
-                const channel_ID = await input("Укажите ID канала: ");
-                const channel2 = client.channels.cache.get(channel_ID);
-                if (channel2) {
-                    channel = channel2;
-                    console.log(`>>> Установлен канал #${channel.name} ( ${channel.id} )`);
-                    config.channel = channel.id;
-                    writeFile("./config.json", JSON.stringify(config, null, 4));
-                    write();
-                } else {
-                    console.log(">>> Канал не найден!!!");
-                    write(".channel");;
-                };
-            } else if (id.toLowerCase() === ".exit") process.exit();
-            else {
-                channel.messages.fetch(id)
-                    .then(m => { addMsg(m); write() })
-                    .catch(err => { console.error(">>> Сообщение не найдено!!! Ошибка:\n" + err.stack); write() });
+        async function saveChannel() {
+            if (channel) return resolve();
+            const channel_ID = await input("Укажите ID канала: ");
+            const channel2 = client.channels.cache.get(channel_ID);
+            if (!channel2) {
+                console.log(">>> Канал не найден!!!");
+                saveChannel();
+            } else {
+                channel = channel2;
+                console.log(`>>> Выбран канал #${channel2.name} ( ${channel2.id} )`);
+                config.channel = channel2.id
+                await writeFile("./config.json", JSON.stringify(config, null, 4));
+                resolve()
             }
         };
-    })
+        saveChannel()
+    }).then(() => write())
+    async function write(id) {
+        if (!id) id = await input(`Укажите ID сообщения №${msg.length + 1}: `);
+        if (id.toLowerCase() === ".start") {
+            if (msg.length === 0) {
+                console.log(">>> А сообщений то нема!!!");
+                write();
+                return;
+            };
+            const bool = await input(`Будет отправлено ${msg.length} сообщений. Продолжить? [ Y/n ] `);
+            if (["y", "yes", "да"].some(t => bool.toLowerCase().includes(t))) {
+                const bar = new ProgressBar('Отправка... [:bar] :percent :current/:total [ :elapsed ]', { total: msg.length, complete: "█", incomplete: "▒", width: 25 });
+                let i = 0;
+                async function send() {
+                    if (msg.length === 0) {
+                        console.log(">>> Передача файлов завершена, всего хорошего.");
+                        process.exit();
+                    };
+                    i++
+                    bar.tick();
+                    bar.interrupt(JSON.stringify(msg[0], null, 4));
+                    await hook.send(msg[0]).catch(err => {
+                        bar.interrupt(`Не удалось отправить сообщение, возможно оно слишком большое.\n${JSON.stringify(msg[0], null, 4)}`);
+                        hook.send(`Не удалось отправить сообщение, возможно оно слишком большое.\n${"```js\n"}${JSON.stringify(msg[0], null, 4)}${"\n```"}`)
+                    })
+                    msg.shift();
+                    send();
+                };
+                return send()
+            } else write()
+        } else if (id.toLowerCase() === ".channel") {
+            const channel_ID = await input("Укажите ID канала: ");
+            const channel2 = client.channels.cache.get(channel_ID);
+            if (channel2) {
+                channel = channel2;
+                console.log(`>>> Установлен канал #${channel.name} ( ${channel.id} )`);
+                config.channel = channel.id;
+                writeFile("./config.json", JSON.stringify(config, null, 4));
+                write();
+            } else {
+                console.log(">>> Канал не найден!!!");
+                write(".channel");;
+            };
+        } else if (id.toLowerCase() === ".exit") process.exit();
+        else {
+            channel.messages.fetch(id)
+                .then(m => { addMsg(m); write() })
+                .catch(err => { console.error(">>> Сообщение не найдено!!! Ошибка:\n" + err.stack); write() });
+        }
+    };
 });
 client.login(process.env.TOKEN_BOT);
